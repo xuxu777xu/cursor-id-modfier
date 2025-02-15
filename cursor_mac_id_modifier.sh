@@ -307,6 +307,7 @@ modify_cursor_app_files() {
     local timestamp=$(date +%Y%m%d_%H%M%S)
     local temp_dir="/tmp/cursor_reset_${timestamp}"
     local temp_app="${temp_dir}/Cursor.app"
+    local backup_app="/tmp/Cursor.app.backup_${timestamp}"
     
     # 清理可能存在的旧临时目录
     if [ -d "$temp_dir" ]; then
@@ -320,11 +321,19 @@ modify_cursor_app_files() {
         return 1
     }
 
+    # 备份原应用
+    log_info "备份原应用..."
+    cp -R "$CURSOR_APP_PATH" "$backup_app" || {
+        log_error "无法创建应用备份"
+        rm -rf "$temp_dir"
+        return 1
+    }
+
     # 复制应用到临时目录
     log_info "创建临时工作副本..."
     cp -R "$CURSOR_APP_PATH" "$temp_dir" || {
         log_error "无法复制应用到临时目录"
-        rm -rf "$temp_dir"
+        rm -rf "$temp_dir" "$backup_app"
         return 1
     }
 
@@ -413,45 +422,60 @@ modify_cursor_app_files() {
         return 1
     fi
     
-    # 重新签名应用
-    log_info "重新签名应用..."
-    codesign --sign - "$temp_app" --force --deep || {
-        log_warn "应用重新签名失败"
-    }
-
-    # 关闭原应用
-    log_info "正在关闭 Cursor..."
-    osascript -e 'tell application "Cursor" to quit' || true
-    sleep 2
+    # 重新签名应用（增加重试机制）
+    local max_retry=3
+    local retry_count=0
+    local sign_success=false
     
-    # 创建应用备份
-    local backup_app="/Applications/Cursor.backup.${timestamp}.app"
-    log_info "创建应用备份: ${backup_app/$HOME/\~}"
-    if ! mv "$CURSOR_APP_PATH" "$backup_app"; then
-        log_error "创建备份失败"
-        rm -rf "$temp_dir"
+    while [ $retry_count -lt $max_retry ]; do
+        ((retry_count++))
+        log_info "尝试签名 (第 $retry_count 次)..."
+        
+        # 使用更详细的签名参数
+        if codesign --sign - --force --deep --preserve-metadata=entitlements,identifier,flags "$temp_app" 2>&1 | tee /tmp/codesign.log; then
+            # 验证签名
+            if codesign --verify -vvvv "$temp_app" 2>/dev/null; then
+                sign_success=true
+                log_info "应用签名验证通过"
+                break
+            else
+                log_warn "签名验证失败，错误日志："
+                cat /tmp/codesign.log
+            fi
+        else
+            log_warn "签名失败，错误日志："
+            cat /tmp/codesign.log
+        fi
+        
+        sleep 1
+    done
+
+    if ! $sign_success; then
+        log_error "经过 $max_retry 次尝试仍无法完成签名"
+        log_error "请手动执行以下命令完成签名："
+        echo -e "${BLUE}sudo codesign --sign - --force --deep '${temp_app}'${NC}"
+        echo -e "${YELLOW}操作完成后，请手动将应用复制到原路径：${NC}"
+        echo -e "${BLUE}sudo cp -R '${temp_app}' '/Applications/'${NC}"
+        log_info "临时文件保留在：${temp_dir}"
         return 1
     fi
-    
+
     # 替换原应用
     log_info "安装修改版应用..."
-    if ! mv "$temp_app" "/Applications/"; then
+    if ! sudo rm -rf "$CURSOR_APP_PATH" || ! sudo cp -R "$temp_app" "/Applications/"; then
         log_error "应用替换失败，正在恢复..."
-        mv "$backup_app" "$CURSOR_APP_PATH"
-        rm -rf "$temp_dir"
+        sudo rm -rf "$CURSOR_APP_PATH"
+        sudo cp -R "$backup_app" "$CURSOR_APP_PATH"
+        rm -rf "$temp_dir" "$backup_app"
         return 1
     fi
     
     # 清理临时文件
-    rm -rf "$temp_dir"
+    rm -rf "$temp_dir" "$backup_app"
     
     # 设置权限
-    chown -R "$CURRENT_USER:staff" "$CURSOR_APP_PATH"
-    chmod -R 755 "$CURSOR_APP_PATH"
-    
-    # 重建 LaunchServices 数据库
-    # log_info "正在重建 LaunchServices 数据库..."
-    # /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$CURSOR_APP_PATH"
+    sudo chown -R "$CURRENT_USER:staff" "$CURSOR_APP_PATH"
+    sudo chmod -R 755 "$CURSOR_APP_PATH"
     
     log_info "Cursor 主程序文件修改完成！原版备份在: ${backup_app/$HOME/\~}"
     return 0
