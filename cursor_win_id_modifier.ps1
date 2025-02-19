@@ -39,7 +39,13 @@ Write-Host @"
     ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝
 
 "@
-
+Write-Host "$BLUE================================$NC"
+Write-Host "$GREEN   Cursor 设备ID 修改工具          $NC"
+Write-Host "$YELLOW  关注公众号【煎饼果子卷AI】 $NC"
+Write-Host "$YELLOW  一起交流更多Cursor技巧和AI知识(脚本免费、关注公众号加群有更多技巧和大佬)  $NC"
+Write-Host "$YELLOW  [重要提示] 本工具免费，如果对您有帮助，请关注公众号【煎饼果子卷AI】  $NC"
+Write-Host "$BLUE================================$NC"
+Write-Host ""
 
 # 获取并显示 Cursor 版本
 function Get-CursorVersion {
@@ -343,16 +349,23 @@ try {
         Write-Host "│       └── (空)"
     }
 
+    # 显示公众号信息
+    Write-Host ""
+    Write-Host "$GREEN================================$NC"
+    Write-Host "$YELLOW  关注公众号【煎饼果子卷AI】一起交流更多Cursor技巧和AI知识(脚本免费、关注公众号加群有更多技巧和大佬)  $NC"
+    Write-Host "$GREEN================================$NC"
+    Write-Host ""
+    Write-Host "$GREEN[信息]$NC 请重启 Cursor 以应用新的配置"
+    Write-Host ""
 
+    # 询问是否要禁用自动更新
+    Write-Host ""
+    Write-Host "$YELLOW[询问]$NC 是否要禁用 Cursor 自动更新功能？"
+    Write-Host "0) 否 - 保持默认设置 (按回车键)"
+    Write-Host "1) 是 - 禁用自动更新"
+    $choice = Read-Host "请输入选项 (0)"
 
-    # # 询问是否要禁用自动更新
-    # Write-Host ""
-    # Write-Host "$YELLOW[询问]$NC 是否要禁用 Cursor 自动更新功能？"
-    # Write-Host "0) 否 - 保持默认设置 (按回车键)"
-    # Write-Host "1) 是 - 禁用自动更新"
-    # $choice = Read-Host "请输入选项 (0)"
-
-    # if ($choice -eq "1") {
+    if ($choice -eq "1") {
         Write-Host ""
         Write-Host "$GREEN[信息]$NC 正在处理自动更新..."
         $updaterPath = "$env:LOCALAPPDATA\cursor-updater"
@@ -450,7 +463,10 @@ try {
             Write-Host "$RED[错误]$NC 发生未知错误: $_"
             Show-ManualGuide
         }
-    # }
+    }
+    else {
+        Write-Host "$GREEN[信息]$NC 保持默认设置，不进行更改"
+    }
 
     # 保留有效的注册表更新
     Update-MachineGuid
